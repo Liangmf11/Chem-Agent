@@ -28,27 +28,6 @@ def add_numbers(input_str: str) -> str:
     except ValueError:
         return "Invalid input format. Please provide two numbers separated by a comma."
 
-# Tool 1: Name2SMILES
-# @tool
-# def name_to_smiles(molecule_name: str) -> str:
-#     """
-#     Converts a molecule name to its SMILES representation.
-#     Uses RDKit as a basic example. In a real-world scenario, 
-#     this could query ChemSpider, PubChem, or OPSIN APIs.
-#     """
-#     try:
-#         smiles = {
-#             "water": "O",
-#             "ethanol": "CCO",
-#             "benzene": "C1=CC=CC=C1"
-#         }.get(molecule_name.lower(), None)
-#         if smiles:
-#             return f"The SMILES representation of {molecule_name} is {smiles}."
-#         else:
-#             return f"Unable to find the SMILES for {molecule_name}. Please provide another name."
-#     except Exception as e:
-#         return f"An error occurred: {e}"
-
 
 # Tool 1: Name2SMILES
 @tool
@@ -96,7 +75,7 @@ tools = [
     Tool(
         name="Name2SMILES",
         func=name_to_smiles.run,
-        description="Convert a molecule name to its SMILES representation."
+        description="Converts a molecule name to its SMILES representation using PubChem and ChemSpace."
     ),
     Tool(
         name="SMILES2Weight",
