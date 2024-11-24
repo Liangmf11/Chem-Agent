@@ -2,25 +2,20 @@ import argparse
 import openai
 from dotenv import load_dotenv
 import os
-from typing import List, Dict
 
 from langchain_community.llms import Tongyi
 from langchain.tools import tool
 from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
-from langchain.schema import AgentAction, AgentFinish
-from langchain.agents.agent import BaseSingleActionAgent
 from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.document_loaders import TextLoader, PyPDFLoader
-from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.agent_toolkits.load_tools import load_tools
-from pydantic import Field
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 
 from tools import Name2SMILES
+from agents import CustomAgent
 
 # Load environment variables
 load_dotenv()
@@ -65,54 +60,6 @@ tools = [
     Tool(name="Name2SMILES", func=name_to_smiles.run, description="Convert molecule names to SMILES."),
     Tool(name="SMILES2Weight", func=smiles_to_weight.run, description="Calculate molecular weight from SMILES.")
 ]
-
-# Define the Custom Agent
-class CustomAgent(BaseSingleActionAgent):
-    """Custom agent that decides whether to call a tool or respond directly."""
-
-    tools: Dict[str, Tool] = Field(default_factory=dict)
-    prompt: str = "You are a helpful assistant that uses tools to answer questions. Respond with a tool action or provide a direct response."
-
-    def __init__(self, tools: List[Tool]):
-        super().__init__()
-        self.tools = {tool.name: tool for tool in tools}
-
-    @property
-    def input_keys(self) -> List[str]:
-        """Input keys expected by the agent."""
-        return ["input"]
-
-    def plan(self, intermediate_steps: List[tuple], **kwargs) -> AgentAction:
-        """Plan the agent's next step based on the input and previous steps."""
-        query = kwargs["input"].strip().lower()
-
-        # Debug: Log intermediate_steps
-        if intermediate_steps:
-            # Unpack the last intermediate step
-            last_action, last_result = intermediate_steps[-1]
-            
-            # Ensure it's an AgentAction and check its tool
-            if isinstance(last_action, AgentAction) and last_action.tool == "Search" and last_result:
-                # Use the LLM to summarize the search results
-                summary_prompt = (
-                    "The following are results from a web search:\n"
-                    f"{str(last_result)}\n"
-                    "Please summarize this information in a concise and user-friendly way."
-                )
-
-                summary = llm.invoke(summary_prompt)
-                return AgentFinish(
-                    return_values={"output": summary.content},
-                    log="Final response created using LLM summarization."
-                )
-
-        # Default to using the Search tool for other queries
-        return AgentAction(tool="Search", tool_input=query, log=f"Using Search for {query}"
-        )
-
-
-    async def aplan(self, intermediate_steps: List[AgentAction], **kwargs):
-        raise NotImplementedError("Async planning not implemented.")
 
 # Initialize memory and LLM
 memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
