@@ -2,11 +2,11 @@ import argparse
 import openai
 from dotenv import load_dotenv
 import os
+from huggingface_hub import login
 
-from langchain_community.llms import Tongyi
 from langchain.tools import tool
 from langchain.agents import initialize_agent, Tool, AgentType, AgentExecutor
-from langchain_openai import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -63,14 +63,31 @@ tools = [
 
 # Initialize memory and LLM
 memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
-
+    
+def initialize_llm(model_name: str, **kwargs):
+    if model_name.lower() == "openai":
+        return ChatOpenAI(model=kwargs.get("model", "gpt-4o-mini"), temperature=kwargs.get("temperature", 0.1))
+    elif model_name.lower() == "tongyi":
+        return ChatOpenAI(temperature=kwargs.get("temperature", 0.1), 
+                          openai_api_key=os.getenv("DASHSCOPE_API_KEY"),
+                          openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1", 
+                          model="qwen-max") 
+    elif model_name.lower() == "hf":
+        return ChatOpenAI(temperature=kwargs.get("temperature", 0.1), 
+                          openai_api_key=os.getenv("HUGGINGFACE_API_KEY"),
+                          openai_api_base="https://api-inference.huggingface.co/v1/", 
+                          model="Qwen/Qwen2.5-Coder-32B-Instruct") 
+    else:
+        raise ValueError(f"Unsupported model: {model_name}")
+    
 # Initialize the agent
 custom_agent = CustomAgent(tools=tools)
 custom_agent_executor = AgentExecutor(agent=custom_agent, tools=tools, verbose=True, handle_parsing_errors=True)
 
 # Main program
-def main(agent_choice):
+def main(agent_choice, llm_choice="openai"):
+    llm = initialize_llm(llm_choice, model="gpt-4o-mini", temperature=0.1)
+    
     agent_type_mapping = {
         1: AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         2: AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
@@ -96,7 +113,7 @@ def main(agent_choice):
         print(f"Agent: {response['output']}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Choose the agent type for the chatbot.")
+    parser = argparse.ArgumentParser(description="Choose the agent type and LLM for the chatbot.")
     parser.add_argument(
         "-a", "--agent", 
         type=int, 
@@ -104,5 +121,12 @@ if __name__ == "__main__":
         default=2,
         help="1: Zero-shot, 2: Conversational (default), 3: Docstore, 4: Self-ask, 5: Custom agent"
     )
+    parser.add_argument(
+        "-l", "--llm", 
+        type=str, 
+        choices=["openai", "tongyi", "hf"],
+        default="openai",
+        help="Specify the LLM to use (default: openai)."
+    )
     args = parser.parse_args()
-    main(args.agent)
+    main(args.agent, args.llm)
