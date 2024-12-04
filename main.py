@@ -1,5 +1,7 @@
 import argparse
 import openai
+import requests
+import re
 from dotenv import load_dotenv
 import os
 from huggingface_hub import login
@@ -49,6 +51,44 @@ def smiles_to_weight(smiles: str) -> str:
     except Exception as e:
         return f"Error: {e}"
 
+@tool
+def fetch_uniprot_sequences(ec_number: str, output_file: str = "uniprot_sequences.fasta") -> str:
+    """
+    Fetches UniProt sequences for a given EC number and saves them to a FASTA file.
+    Adds a check for the format of the EC number before making the API request.
+    
+    Args:
+        ec_number (str): The EC number to search for in UniProt.
+        output_file (str): The path to the file where sequences will be saved.
+
+    Returns:
+        str: A message indicating the result of the operation.
+    """
+    
+    # Remove leading/trailing whitespaces from input
+    ec_number = ec_number.strip()
+    
+    # Check if the EC number matches the expected format (e.g., 1.1.1.1)
+    ec_number_pattern = r"^\d{1,2}\.\d{1,2}\.\d{1,2}\.\d{1,2}$"
+    
+    if not re.match(ec_number_pattern, ec_number):
+        return f"Invalid EC number format: '{ec_number}'. The correct format is 'X.X.X.X', where X is a number."
+
+    # If EC number format is valid, proceed with the UniProt request
+    query_url = f"https://rest.uniprot.org/uniprotkb/search?query=ec:{ec_number}&format=fasta"
+    
+    # Perform the GET request
+    response = requests.get(query_url)
+    
+    if response.status_code == 200:
+        # Save the response text (FASTA data) to the specified file
+        with open(output_file, "w") as f:
+            f.write(response.text)
+        return f"UniProt sequences for EC {ec_number} saved to {output_file}."
+    else:
+        # If there is an error, return a message indicating the failure
+        return f"Failed to fetch UniProt sequences for EC {ec_number}. Status code: {response.status_code}. Error: {response.text}"
+
 # Load a search tool
 search_tool = load_tools(["serpapi"])[0]
 
@@ -56,9 +96,10 @@ self_ask_search_tool = [Tool(name="Intermediate Answer", func=search_tool.run, d
 
 tools = [
     Tool(name="Calculator", func=add_numbers.run, description="Add two numbers."),
-    Tool(name="Search", func=search_tool.run, description="Search the web for information."),
+    # Tool(name="Search", func=search_tool.run, description="Search the web for information."),
     Tool(name="Name2SMILES", func=name_to_smiles.run, description="Convert molecule names to SMILES."),
-    Tool(name="SMILES2Weight", func=smiles_to_weight.run, description="Calculate molecular weight from SMILES.")
+    Tool(name="SMILES2Weight", func=smiles_to_weight.run, description="Calculate molecular weight from SMILES."),
+    Tool(name="Fetch UniProt Sequences", func=fetch_uniprot_sequences.run, description="Fetch UniProt sequences for a given EC number.")
 ]
 
 # Initialize memory and LLM
